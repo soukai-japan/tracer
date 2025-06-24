@@ -4,6 +4,7 @@ import logo from '@/assets/logo.svg'
 import { db } from '@/services/db'
 
 const showAddModal = ref(false)
+const isLoading = ref(false)
 const addForm = reactive({
   type: '',
   word: '',
@@ -19,6 +20,69 @@ const addForm = reactive({
   content: '',
   translation: '',
 })
+
+const parseWordWithAI = async (word: string) => {
+  try {
+    isLoading.value = true
+    const settings = await db.settings.get('ai_settings')
+    const apiKey = settings?.siliconflowApiKey
+    if (!apiKey) {
+      alert('请先在设置中配置SiliconFlow API Key')
+      return
+    }
+
+    const response = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'Qwen/Qwen2.5-7B-Instruct', // 根据文档选择一个合适的模型 <mcreference link="https://docs.siliconflow.cn/cn/api-reference/chat-completions/chat-completions" index="0"></mcreference>
+        messages: [
+          {
+            role: 'user',
+            content: `请解析日语单词 "${word}" 的含义、发音和例句。请以JSON格式返回，包含 'meaning', 'pronunciation', 'example' 字段。例如: {"meaning": "含义", "pronunciation": "发音", "example": "例句"}`,
+          },
+        ],
+        temperature: 0.7,
+      }),
+    })
+
+    if (!response.ok) throw new Error('API请求失败')
+
+    const result = await response.json()
+    let aiContent = result.choices[0].message.content
+
+    // 尝试从字符串中提取JSON部分
+    const jsonMatch = aiContent.match(/```json\n([\s\S]*?)\n```/)
+    if (jsonMatch && jsonMatch[1]) {
+      aiContent = jsonMatch[1]
+    }
+
+    try {
+      const parsedData = JSON.parse(aiContent)
+      addForm.meaning = parsedData.meaning || ''
+      addForm.pronunciation = parsedData.pronunciation || ''
+      addForm.wordExample = parsedData.example || ''
+    } catch (_) {
+      console.warn('AI返回内容不是有效的JSON，尝试进行文本解析:', aiContent)
+      // Fallback to simple text parsing if AI doesn't return JSON
+      const meaningMatch = aiContent.match(/含义: (.+)/)
+      const pronunciationMatch = aiContent.match(/发音: (.+)/)
+      const exampleMatch = aiContent.match(/例句: (.+)/)
+
+      addForm.meaning = meaningMatch ? meaningMatch[1].trim() : aiContent
+      addForm.pronunciation = pronunciationMatch ? pronunciationMatch[1].trim() : ''
+      addForm.wordExample = exampleMatch ? exampleMatch[1].trim() : ''
+    }
+  } catch (error) {
+    console.error('AI解析单词失败:', error)
+    alert('AI解析单词失败，请检查控制台或稍后重试')
+  } finally {
+    isLoading.value = false
+  }
+}
 
 const startQuickAdd = (type: string) => {
   addForm.type = type
@@ -107,7 +171,17 @@ const closeModal = () => {
           <template v-if="addForm.type === 'word'">
             <div class="form-group">
               <label for="word">单词:</label>
-              <input type="text" id="word" v-model="addForm.word" required />
+              <div class="word-input-container">
+                <input type="text" id="word" v-model="addForm.word" required />
+                <button
+                  type="button"
+                  @click="parseWordWithAI(addForm.word)"
+                  :disabled="!addForm.word || isLoading"
+                  class="ai-parse-button"
+                >
+                  {{ isLoading ? '解析中...' : 'AI解析' }}
+                </button>
+              </div>
             </div>
             <div class="form-group">
               <label for="meaning">含义:</label>
@@ -329,6 +403,34 @@ button:hover {
   resize: vertical;
 }
 
+.word-input-container {
+  display: flex;
+  gap: 10px;
+}
+
+.word-input-container input {
+  flex-grow: 1;
+}
+
+.ai-parse-button {
+  padding: 10px 15px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+  transition: background-color 0.2s ease;
+}
+
+.ai-parse-button:hover:not(:disabled) {
+  background-color: #45a049;
+}
+
+.ai-parse-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
 .modal-actions {
   display: flex;
   justify-content: flex-end;
