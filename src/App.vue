@@ -8,6 +8,7 @@ import { RouterLink, RouterView } from 'vue-router'
     <RouterLink to="/vocabulary">单词</RouterLink>
     <RouterLink to="/grammar">语法</RouterLink>
     <RouterLink to="/passage">文章</RouterLink>
+    <RouterLink to="/stats">数据统计</RouterLink>
     <RouterLink to="/settings">设置</RouterLink>
     <RouterLink to="/about">关于</RouterLink>
   </nav>
