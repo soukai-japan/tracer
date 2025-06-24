@@ -13,8 +13,6 @@
         <p class="created-at">{{ new Date(word.createdAt).toLocaleDateString() }}</p>
       </div>
     </div>
-    <!-- 修复缺失的闭合标签 -->
-    <button @click="addNewWord">添加新单词</button>
   </div>
 
   <!-- Detail Modal -->
@@ -66,11 +64,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-// import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { db, Word } from '@/services/db'
 
-const router = useRouter()
 const vocabularyList = ref<DbWord[]>([]) // 改为直接存储单词数组
 
 onMounted(async () => {
@@ -129,10 +124,6 @@ const deleteWord = async () => {
     closeDetailModal()
     console.log('删除单词', selectedWord.value)
   }
-}
-
-const addNewWord = () => {
-  router.push('/') // Navigate to Home page for quick add
 }
 </script>
 

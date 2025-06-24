@@ -13,7 +13,6 @@
         <p class="created-at">{{ new Date(grammar.createdAt).toLocaleDateString() }}</p>
       </div>
     </div>
-    <button @click="addNewGrammar">添加新语法</button>
   </div>
 
   <!-- Detail Modal -->
@@ -74,10 +73,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { db, Grammar as DbGrammar } from '@/services/db'
 
-const router = useRouter()
 const grammarList = ref<DbGrammar[]>([]) // 改为直接存储语法数组
 
 onMounted(async () => {
@@ -136,10 +133,6 @@ const deleteGrammar = async () => {
     closeDetailModal()
     console.log('删除语法', selectedGrammar.value)
   }
-}
-
-const addNewGrammar = () => {
-  router.push('/') // Navigate to Home page for quick add
 }
 </script>
 

@@ -13,7 +13,6 @@
         <p class="created-at">{{ new Date(passage.createdAt).toLocaleDateString() }}</p>
       </div>
     </div>
-    <button @click="addNewPassage">添加新文章</button>
   </div>
 
   <!-- Detail Modal -->
@@ -118,19 +117,6 @@ const deletePassage = async () => {
     closeDetailModal()
     console.log('删除文章', selectedPassage.value)
   }
-}
-
-const addNewPassage = async () => {
-  // For simplicity, let's add a dummy passage directly for now
-  // In a real app, you'd navigate to a form or open a modal
-  const newPassageData = {
-    title: '新文章 ' + new Date().toLocaleString(),
-    author: '未知',
-    content: '这是一篇新文章的内容。',
-    createdAt: new Date(), // 记录创建时间
-  }
-  await db.passages.add(newPassageData)
-  await loadPassages()
 }
 </script>
 
