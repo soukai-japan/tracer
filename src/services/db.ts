@@ -40,8 +40,8 @@ export class MySubClassedDexie extends Dexie {
   constructor() {
     super('soukaiJapanDatabase')
     this.version(1).stores({
-      words: '++id, word, meaning, pronunciation, example, createdAt',
-      grammars: '++id, grammar, meaning, usage, example, createdAt',
+      words: '++id, &word, meaning, pronunciation, example, createdAt',
+      grammars: '++id, &grammar, meaning, usage, example, createdAt',
       passages: '++id, name, author, source, content, translation, createdAt',
       settings: 'id',
     })

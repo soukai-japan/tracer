@@ -70,7 +70,7 @@ const parseWordWithAI = async (word: string) => {
       addForm.meaning = parsedData.meaning || ''
       addForm.pronunciation = parsedData.pronunciation || ''
       addForm.wordExample = parsedData.example || ''
-    } catch (error) {
+    } catch (error: any) {
       console.warn('AI返回内容不是有效的JSON，尝试进行文本解析:', aiContent)
       console.error(error)
       // Fallback to simple text parsing if AI doesn't return JSON
@@ -82,7 +82,7 @@ const parseWordWithAI = async (word: string) => {
       addForm.pronunciation = pronunciationMatch ? pronunciationMatch[1].trim() : ''
       addForm.wordExample = exampleMatch ? exampleMatch[1].trim() : ''
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('AI解析单词失败:', error)
     alert('AI解析单词失败，请检查控制台或稍后重试')
   } finally {
@@ -140,11 +140,18 @@ const addNewContent = async () => {
       console.log('Passage added successfully!')
     }
     showAddModal.value = false
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Error adding ${addForm.type}:`, error)
-    alert(
-      `添加${addForm.type === 'word' ? '单词' : addForm.type === 'grammar' ? '语法' : '文章'}失败！请检查控制台。`,
-    )
+
+    if (error.name === 'ConstraintError') {
+      alert(
+        `添加失败：${addForm.type === 'word' ? '单词' : '语法'} "${addForm.type === 'word' ? addForm.word : addForm.grammar}" 已存在！`,
+      )
+    } else {
+      alert(
+        `添加${addForm.type === 'word' ? '单词' : addForm.type === 'grammar' ? '语法' : '文章'}失败！请检查控制台。`,
+      )
+    }
   }
 }
 
