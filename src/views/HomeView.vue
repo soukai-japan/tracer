@@ -1,16 +1,20 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import logo from '@/assets/logo.svg'
 import { db } from '@/services/db'
+import type { Tag } from '@/services/db'
 
 const showAddModal = ref(false)
 const isLoading = ref(false)
 const addForm = reactive({
   type: '',
-  word: '',
-  meaning: '',
-  pronunciation: '',
-  wordExample: '',
+  writing: '', // 书写法
+  pitch: '', // 声调
+  partOfSpeech: '', // 词性
+  reading: '', // 读法
+  chineseTranslation: '', // 汉语翻译
+  example: '', // 例句
+  selectedTagIds: [] as number[], // 选中的标签ID
   grammar: '',
   usage: '',
   grammarExample: '',
@@ -19,9 +23,10 @@ const addForm = reactive({
   source: '',
   content: '',
   translation: '',
+  grammarMeaning: '', // 新增的语法含义字段
 })
 
-const parseWordWithAI = async (word: string) => {
+const parseWordWithAI = async (writing: string) => {
   try {
     isLoading.value = true
     const settings = await db.settings.get('ai_settings')
@@ -47,7 +52,7 @@ const parseWordWithAI = async (word: string) => {
         messages: [
           {
             role: 'user',
-            content: `请解析日语单词 "${word}" 的含义、发音和例句。请以JSON格式返回，包含 'meaning', 'pronunciation', 'example' 字段。例如: {"meaning": "含义", "pronunciation": "发音", "example": "例句"}`,
+            content: `请解析日语单词 "${writing}" 的书写法、声调、词性、读法、汉语翻译和例句。请以JSON格式返回，包含 'writing', 'pitch', 'partOfSpeech', 'reading', 'chineseTranslation', 'example' 字段。例如: {"writing": "${writing}", "pitch": "声调", "partOfSpeech": "词性", "reading": "读法", "chineseTranslation": "汉语翻译", "example": "例句"}`,
           },
         ],
         temperature: 0.7,
@@ -67,22 +72,31 @@ const parseWordWithAI = async (word: string) => {
 
     try {
       const parsedData = JSON.parse(aiContent)
-      addForm.meaning = parsedData.meaning || ''
-      addForm.pronunciation = parsedData.pronunciation || ''
-      addForm.wordExample = parsedData.example || ''
-    } catch (error: any) {
+      addForm.writing = parsedData.writing || ''
+      addForm.pitch = parsedData.pitch || ''
+      addForm.partOfSpeech = parsedData.partOfSpeech || ''
+      addForm.reading = parsedData.reading || ''
+      addForm.chineseTranslation = parsedData.chineseTranslation || ''
+      addForm.example = parsedData.example || ''
+    } catch (error: unknown) {
       console.warn('AI返回内容不是有效的JSON，尝试进行文本解析:', aiContent)
       console.error(error)
       // Fallback to simple text parsing if AI doesn't return JSON
-      const meaningMatch = aiContent.match(/含义: (.+)/)
-      const pronunciationMatch = aiContent.match(/发音: (.+)/)
+      const writingMatch = aiContent.match(/书写法: (.+)/)
+      const pitchMatch = aiContent.match(/声调: (.+)/)
+      const partOfSpeechMatch = aiContent.match(/词性: (.+)/)
+      const readingMatch = aiContent.match(/读法: (.+)/)
+      const chineseTranslationMatch = aiContent.match(/汉语翻译: (.+)/)
       const exampleMatch = aiContent.match(/例句: (.+)/)
 
-      addForm.meaning = meaningMatch ? meaningMatch[1].trim() : aiContent
-      addForm.pronunciation = pronunciationMatch ? pronunciationMatch[1].trim() : ''
-      addForm.wordExample = exampleMatch ? exampleMatch[1].trim() : ''
+      addForm.writing = writingMatch ? writingMatch[1].trim() : aiContent
+      addForm.pitch = pitchMatch ? pitchMatch[1].trim() : ''
+      addForm.partOfSpeech = partOfSpeechMatch ? partOfSpeechMatch[1].trim() : ''
+      addForm.reading = readingMatch ? readingMatch[1].trim() : ''
+      addForm.chineseTranslation = chineseTranslationMatch ? chineseTranslationMatch[1].trim() : ''
+      addForm.example = exampleMatch ? exampleMatch[1].trim() : ''
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('AI解析单词失败:', error)
     alert('AI解析单词失败，请检查控制台或稍后重试')
   } finally {
@@ -93,10 +107,12 @@ const parseWordWithAI = async (word: string) => {
 const startQuickAdd = (type: string) => {
   addForm.type = type
   // Reset all fields
-  addForm.word = ''
-  addForm.meaning = ''
-  addForm.pronunciation = ''
-  addForm.wordExample = ''
+  addForm.writing = ''
+  addForm.pitch = ''
+  addForm.partOfSpeech = ''
+  addForm.reading = ''
+  addForm.chineseTranslation = ''
+  addForm.example = ''
   addForm.grammar = ''
   addForm.usage = ''
   addForm.grammarExample = ''
@@ -105,24 +121,34 @@ const startQuickAdd = (type: string) => {
   addForm.source = ''
   addForm.content = ''
   addForm.translation = ''
+  addForm.selectedTagIds = [] // Reset selected tags
   showAddModal.value = true
+}
+
+const showOptionalSection = ref(false)
+
+const toggleOptionalSection = () => {
+  showOptionalSection.value = !showOptionalSection.value
 }
 
 const addNewContent = async () => {
   try {
     if (addForm.type === 'word') {
       await db.words.add({
-        word: addForm.word,
-        meaning: addForm.meaning,
-        pronunciation: addForm.pronunciation,
-        example: addForm.wordExample,
+        writing: addForm.writing,
+        pitch: addForm.pitch,
+        partOfSpeech: addForm.partOfSpeech,
+        reading: addForm.reading,
+        chineseTranslation: addForm.chineseTranslation,
+        example: addForm.example,
+        tagIds: Array.from(addForm.selectedTagIds),
         createdAt: new Date(),
       })
       console.log('Word added successfully!')
     } else if (addForm.type === 'grammar') {
       await db.grammars.add({
         grammar: addForm.grammar,
-        meaning: addForm.meaning,
+        meaning: addForm.grammarMeaning,
         usage: addForm.usage,
         example: addForm.grammarExample,
         createdAt: new Date(),
@@ -140,12 +166,12 @@ const addNewContent = async () => {
       console.log('Passage added successfully!')
     }
     showAddModal.value = false
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`Error adding ${addForm.type}:`, error)
 
-    if (error.name === 'ConstraintError') {
+    if (error instanceof Error && error.name === 'ConstraintError') {
       alert(
-        `添加失败：${addForm.type === 'word' ? '单词' : '语法'} "${addForm.type === 'word' ? addForm.word : addForm.grammar}" 已存在！`,
+        `添加失败：${addForm.type === 'word' ? '单词' : '语法'} "${addForm.type === 'word' ? addForm.writing : addForm.grammar}" 已存在！`,
       )
     } else {
       alert(
@@ -158,6 +184,44 @@ const addNewContent = async () => {
 const closeModal = () => {
   showAddModal.value = false
 }
+
+const newTagName = ref('')
+const availableTags = ref<Tag[]>([])
+
+const loadTags = async () => {
+  availableTags.value = await db.tags.where('type').equals('vocabulary').toArray()
+}
+
+const addNewTag = async () => {
+  if (newTagName.value.trim() === '') {
+    alert('标签名称不能为空！')
+    return
+  }
+  try {
+    const existingTag = await db.tags
+      .where('name')
+      .equalsIgnoreCase(newTagName.value.trim())
+      .first()
+    if (existingTag) {
+      alert('标签已存在！')
+      return
+    }
+    await db.tags.add({
+      name: newTagName.value.trim(),
+      type: 'vocabulary',
+      createdAt: new Date(),
+    })
+    newTagName.value = ''
+    await loadTags() // Reload tags after adding new one
+  } catch (error: unknown) {
+    console.error('添加标签失败:', error)
+    alert('添加标签失败！')
+  }
+}
+
+onMounted(() => {
+  loadTags()
+})
 </script>
 
 <template>
@@ -183,13 +247,13 @@ const closeModal = () => {
         <form @submit.prevent="addNewContent">
           <template v-if="addForm.type === 'word'">
             <div class="form-group">
-              <label for="word">单词:</label>
+              <label for="writing">书写法:</label>
               <div class="word-input-container">
-                <input type="text" id="word" v-model="addForm.word" required />
+                <input type="text" id="writing" v-model="addForm.writing" required />
                 <button
                   type="button"
-                  @click="parseWordWithAI(addForm.word)"
-                  :disabled="!addForm.word || isLoading"
+                  @click="parseWordWithAI(addForm.writing)"
+                  :disabled="!addForm.writing || isLoading"
                   class="ai-parse-button"
                 >
                   {{ isLoading ? '解析中...' : 'AI解析' }}
@@ -197,16 +261,55 @@ const closeModal = () => {
               </div>
             </div>
             <div class="form-group">
-              <label for="meaning">含义:</label>
-              <input type="text" id="meaning" v-model="addForm.meaning" required />
+              <label for="reading">读法:</label>
+              <input type="text" id="reading" v-model="addForm.reading" required />
             </div>
             <div class="form-group">
-              <label for="pronunciation">发音:</label>
-              <input type="text" id="pronunciation" v-model="addForm.pronunciation" />
+              <label for="chineseTranslation">汉语翻译:</label>
+              <input
+                type="text"
+                id="chineseTranslation"
+                v-model="addForm.chineseTranslation"
+                required
+              />
             </div>
             <div class="form-group">
-              <label for="wordExample">例句 (可选):</label>
-              <textarea id="wordExample" v-model="addForm.wordExample" rows="3"></textarea>
+              <div class="optional-section" @click="toggleOptionalSection">
+                <h4>
+                  可选信息 <span class="toggle-icon">{{ showOptionalSection ? '▼' : '▶' }}</span>
+                </h4>
+              </div>
+              <div v-if="showOptionalSection" class="optional-fields">
+                <div class="form-group">
+                  <label for="pitch">声调:</label>
+                  <input type="text" id="pitch" v-model="addForm.pitch" />
+                </div>
+                <div class="form-group">
+                  <label for="partOfSpeech">词性:</label>
+                  <input type="text" id="partOfSpeech" v-model="addForm.partOfSpeech" />
+                </div>
+                <div class="form-group">
+                  <label for="example">例句:</label>
+                  <textarea id="example" v-model="addForm.example" rows="3"></textarea>
+                </div>
+                <div class="form-group tags-section">
+                  <label for="tags">标签:</label>
+                  <select id="tags" v-model="addForm.selectedTagIds" multiple class="tag-selector">
+                    <option v-for="tag in availableTags" :key="tag.id" :value="tag.id">
+                      {{ tag.name }}
+                    </option>
+                  </select>
+                  <div class="add-tag-container">
+                    <input
+                      type="text"
+                      v-model="newTagName"
+                      placeholder="新标签名称"
+                      class="tag-input"
+                    />
+                    <button type="button" @click="addNewTag" class="add-tag-button">+</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </template>
 
@@ -217,7 +320,7 @@ const closeModal = () => {
             </div>
             <div class="form-group">
               <label for="meaning">含义:</label>
-              <input type="text" id="meaning" v-model="addForm.meaning" required />
+              <input type="text" id="grammar-meaning" v-model="addForm.grammarMeaning" required />
             </div>
             <div class="form-group">
               <label for="usage">用法:</label>
@@ -488,5 +591,68 @@ button:hover {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+.optional-section {
+  cursor: pointer;
+  margin: 15px 0;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 5px;
+}
+
+.optional-section h4 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.toggle-icon {
+  margin-left: 10px;
+}
+
+.optional-fields {
+  padding: 10px;
+  background-color: #f9f9f9;
+  border-radius: 5px;
+  margin-bottom: 15px;
+}
+
+.tags-section {
+  margin-top: 15px;
+}
+
+.tag-selector {
+  width: 100%;
+  min-height: 100px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+
+.add-tag-container {
+  display: flex;
+  gap: 10px;
+}
+
+.tag-input {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+
+.add-tag-button {
+  padding: 8px 15px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.add-tag-button:hover {
+  background-color: #218838;
 }
 </style>

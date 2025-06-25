@@ -8,8 +8,8 @@
         class="vocabulary-item"
         @click="goToWordDetail(word.id)"
       >
-        <h3>{{ word.word }}</h3>
-        <p>{{ word.meaning }}</p>
+        <h3>{{ word.writing }}</h3>
+        <p>{{ word.chineseTranslation }}</p>
         <p class="created-at">{{ new Date(word.createdAt).toLocaleDateString() }}</p>
       </div>
     </div>
@@ -18,12 +18,28 @@
   <!-- Detail Modal -->
   <div v-if="showDetailModal" class="modal-overlay" @click.self="closeDetailModal">
     <div class="modal-content">
-      <h2>{{ selectedWord?.japanese }}</h2>
-      <p><strong>含义:</strong> {{ selectedWord?.meaning }}</p>
-      <p v-if="selectedWord?.pronunciation">
-        <strong>发音:</strong> {{ selectedWord?.pronunciation }}
+      <h2>{{ selectedWord?.writing }}</h2>
+      <p><strong>ID:</strong> {{ selectedWord?.id ?? 'N/A' }}</p>
+      <p><strong>读法:</strong> {{ selectedWord?.reading }}</p>
+      <p><strong>汉语翻译:</strong> {{ selectedWord?.chineseTranslation }}</p>
+      <p>
+        <strong>创建日期:</strong>
+        {{
+          selectedWord?.createdAt ? new Date(selectedWord.createdAt).toLocaleDateString() : 'N/A'
+        }}
+      </p>
+      <p v-if="selectedWord?.pitch"><strong>声调:</strong> {{ selectedWord?.pitch }}</p>
+      <p v-if="selectedWord?.partOfSpeech">
+        <strong>词性:</strong> {{ selectedWord?.partOfSpeech }}
       </p>
       <p v-if="selectedWord?.example"><strong>例句:</strong> {{ selectedWord?.example }}</p>
+
+      <p v-if="selectedWordTags.length > 0">
+        <strong>标签:</strong>
+        <span v-for="(tag, index) in selectedWordTags" :key="tag.id ?? index">
+          {{ tag.name }}{{ index < selectedWordTags.length - 1 ? ', ' : '' }}
+        </span>
+      </p>
       <div class="modal-actions">
         <button @click="editWord">编辑</button>
         <button @click="deleteWord">删除</button>
@@ -38,20 +54,46 @@
       <h2>编辑单词</h2>
       <form @submit.prevent="saveEdit">
         <div class="form-group">
-          <label for="edit-japanese">日语:</label>
-          <input type="text" id="edit-japanese" v-model="editedWord.japanese" required />
+          <label for="edit-writing">书写法:</label>
+          <input type="text" id="edit-writing" v-model="editedWord!.writing" required />
         </div>
         <div class="form-group">
-          <label for="edit-meaning">含义:</label>
-          <input type="text" id="edit-meaning" v-model="editedWord.meaning" required />
+          <label for="edit-reading">读法:</label>
+          <input type="text" id="edit-reading" v-model="editedWord!.reading" required />
         </div>
         <div class="form-group">
-          <label for="edit-pronunciation">发音:</label>
-          <input type="text" id="edit-pronunciation" v-model="editedWord.pronunciation" />
+          <label for="edit-chineseTranslation">汉语翻译:</label>
+          <input
+            type="text"
+            id="edit-chineseTranslation"
+            v-model="editedWord!.chineseTranslation"
+            required
+          />
         </div>
         <div class="form-group">
-          <label for="edit-example">例句:</label>
-          <textarea id="edit-example" v-model="editedWord.example"></textarea>
+          <label for="edit-pitch">声调 (可选):</label>
+          <input type="text" id="edit-pitch" v-model="editedWord!.pitch" />
+        </div>
+        <div class="form-group">
+          <label for="edit-partOfSpeech">词性 (可选):</label>
+          <input type="text" id="edit-partOfSpeech" v-model="editedWord!.partOfSpeech" />
+        </div>
+        <div class="form-group">
+          <label for="edit-example">例句 (可选):</label>
+          <textarea id="edit-example" v-model="editedWord!.example"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-tags">标签 (可选):</label>
+          <select id="edit-tags" v-model="editedWord!.tagIds" multiple>
+            <option v-for="tag in availableTags" :key="tag.id" :value="tag.id">
+              {{ tag.name }}
+            </option>
+          </select>
+          <div class="add-tag-container">
+            <input type="text" v-model="newTagName" placeholder="新标签名称" />
+            <button type="button" @click="addNewTag">添加标签</button>
+          </div>
         </div>
         <div class="modal-actions">
           <button type="submit">保存</button>
@@ -64,9 +106,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { db, Word } from '@/services/db'
+import { db } from '@/services/db'
+import type { Word, Tag } from '@/services/db'
 
-const vocabularyList = ref<DbWord[]>([]) // 改为直接存储单词数组
+const vocabularyList = ref<Word[]>([])
 
 onMounted(async () => {
   await loadWords()
@@ -78,24 +121,34 @@ const loadWords = async () => {
 
 const showDetailModal = ref(false)
 const selectedWord = ref<Word | null>(null)
+const selectedWordTags = ref<Tag[]>([])
 
 const showEditModal = ref(false)
 const editedWord = ref<Word | null>(null)
+const availableTags = ref<Tag[]>([])
+const newTagName = ref('')
 
-const goToWordDetail = (id: number) => {
+const goToWordDetail = async (id: number) => {
   const foundWord = vocabularyList.value.find((word) => word.id === id) || null
   selectedWord.value = foundWord
+  if (foundWord && foundWord.tagIds && foundWord.tagIds.length > 0) {
+    selectedWordTags.value = await db.tags.where('id').anyOf(foundWord.tagIds).toArray()
+  } else {
+    selectedWordTags.value = []
+  }
   showDetailModal.value = true
 }
 
 const closeDetailModal = () => {
   showDetailModal.value = false
   selectedWord.value = null
+  selectedWordTags.value = []
 }
 
-const editWord = () => {
+const editWord = async () => {
   if (selectedWord.value) {
     editedWord.value = { ...selectedWord.value } // Copy data for editing
+    await loadTags()
     showEditModal.value = true
   }
 }
@@ -104,7 +157,8 @@ const saveEdit = async () => {
   if (editedWord.value && editedWord.value.id !== undefined) {
     await db.words.put({
       ...editedWord.value,
-      createdAt: editedWord.value.createdAt || new Date(), // 如果没有 createdAt，则设置为当前时间
+      createdAt: editedWord.value.createdAt || new Date(),
+      tagIds: editedWord.value.tagIds || [],
     })
     showEditModal.value = false
     editedWord.value = null
@@ -123,6 +177,48 @@ const deleteWord = async () => {
     await loadWords() // Reload words after deletion
     closeDetailModal()
     console.log('删除单词', selectedWord.value)
+  }
+}
+
+const loadTags = async () => {
+  availableTags.value = await db.tags.where('type').equals('vocabulary').toArray()
+}
+
+const addNewTag = async () => {
+  if (newTagName.value.trim() === '') {
+    alert('标签名称不能为空！')
+    return
+  }
+  try {
+    const existingTag = await db.tags
+      .where('name')
+      .equalsIgnoreCase(newTagName.value.trim())
+      .first()
+    if (existingTag) {
+      alert('标签已存在！')
+      return
+    }
+    const newTagId = await db.tags.add({
+      name: newTagName.value.trim(),
+      type: 'vocabulary',
+      createdAt: new Date(),
+    })
+    const newTag: Tag = {
+      id: newTagId,
+      name: newTagName.value.trim(),
+      type: 'vocabulary',
+      createdAt: new Date(),
+    }
+    availableTags.value.push(newTag)
+    if (editedWord.value) {
+      editedWord.value.tagIds = editedWord.value.tagIds || []
+      editedWord.value.tagIds.push(newTagId)
+    }
+    newTagName.value = ''
+    await loadTags() // Reload tags after adding new one
+  } catch (error: unknown) {
+    console.error('添加标签失败:', error)
+    alert('添加标签失败！')
   }
 }
 </script>
