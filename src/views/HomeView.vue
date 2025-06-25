@@ -26,8 +26,13 @@ const parseWordWithAI = async (word: string) => {
     isLoading.value = true
     const settings = await db.settings.get('ai_settings')
     const apiKey = settings?.siliconflowApiKey
+    const selectedModel = settings?.selectedAiModel
     if (!apiKey) {
       alert('请先在设置中配置SiliconFlow API Key')
+      return
+    }
+    if (!selectedModel) {
+      alert('请先在设置中配置SiliconFlow 模型')
       return
     }
 
@@ -38,7 +43,7 @@ const parseWordWithAI = async (word: string) => {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'Qwen/Qwen2.5-7B-Instruct', // 根据文档选择一个合适的模型 <mcreference link="https://docs.siliconflow.cn/cn/api-reference/chat-completions/chat-completions" index="0"></mcreference>
+        model: selectedModel, // 使用用户选择的模型
         messages: [
           {
             role: 'user',
@@ -65,8 +70,9 @@ const parseWordWithAI = async (word: string) => {
       addForm.meaning = parsedData.meaning || ''
       addForm.pronunciation = parsedData.pronunciation || ''
       addForm.wordExample = parsedData.example || ''
-    } catch (_) {
+    } catch (error) {
       console.warn('AI返回内容不是有效的JSON，尝试进行文本解析:', aiContent)
+      console.error(error)
       // Fallback to simple text parsing if AI doesn't return JSON
       const meaningMatch = aiContent.match(/含义: (.+)/)
       const pronunciationMatch = aiContent.match(/发音: (.+)/)

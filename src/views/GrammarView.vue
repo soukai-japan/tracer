@@ -8,8 +8,8 @@
         class="grammar-item"
         @click="goToGrammarDetail(grammar.id)"
       >
-        <h3>{{ grammar.pattern }}</h3>
-        <p>{{ grammar.meaning }}</p>
+        <h3>原文: {{ grammar.grammar }}</h3>
+        <p>含义: {{ grammar.meaning }}</p>
         <p class="created-at">{{ new Date(grammar.createdAt).toLocaleDateString() }}</p>
       </div>
     </div>
@@ -18,7 +18,7 @@
   <!-- Detail Modal -->
   <div v-if="showDetailModal" class="modal-overlay" @click.self="closeDetailModal">
     <div class="modal-content">
-      <h2>{{ selectedGrammar?.pattern }}</h2>
+      <h2>原文: {{ selectedGrammar?.pattern }}</h2>
       <p><strong>含义:</strong> {{ selectedGrammar?.meaning }}</p>
       <p v-if="selectedGrammar?.usage"><strong>用法:</strong> {{ selectedGrammar?.usage }}</p>
       <div v-if="selectedGrammar?.examples && selectedGrammar.examples.length > 0">

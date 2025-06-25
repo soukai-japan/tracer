@@ -51,6 +51,7 @@ export class MySubClassedDexie extends Dexie {
 export interface Settings {
   id: string // e.g., 'ai_settings'
   siliconflowApiKey?: string
+  selectedAiModel?: string // 新增字段，用于存储用户选择的AI模型
 }
 
 export const db = new MySubClassedDexie()

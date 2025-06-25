@@ -8,8 +8,14 @@
         class="passage-item"
         @click="goToPassageDetail(passage.id)"
       >
-        <h3>{{ passage.title }}</h3>
-        <p>{{ passage.author }}</p>
+        <h3 v-if="isURL(passage.source)">
+          <a :href="passage.source" target="_blank" rel="noopener noreferrer" @click.stop>{{
+            passage.name
+          }}</a>
+        </h3>
+        <h3 v-else>{{ passage.name }}</h3>
+        <p>原文: {{ passage.content }}</p>
+        <p>翻译: {{ passage.translation }}</p>
         <p class="created-at">{{ new Date(passage.createdAt).toLocaleDateString() }}</p>
       </div>
     </div>
@@ -18,9 +24,10 @@
   <!-- Detail Modal -->
   <div v-if="showDetailModal" class="modal-overlay" @click.self="closeDetailModal">
     <div class="modal-content">
-      <h2>{{ selectedPassage?.title }}</h2>
+      <h2>{{ selectedPassage?.name }}</h2>
       <p><strong>作者:</strong> {{ selectedPassage?.author }}</p>
-      <p class="passage-content">{{ selectedPassage?.content }}</p>
+      <p class="passage-content"><strong>原文:</strong> {{ selectedPassage?.content }}</p>
+      <p class="passage-content"><strong>翻译:</strong> {{ selectedPassage?.translation }}</p>
       <div class="modal-actions">
         <button @click="editPassage">编辑</button>
         <button @click="deletePassage">删除</button>
@@ -116,6 +123,17 @@ const deletePassage = async () => {
     await loadPassages() // Reload passages after deletion
     closeDetailModal()
     console.log('删除文章', selectedPassage.value)
+  }
+}
+
+const isURL = (str: string | undefined): boolean => {
+  if (!str) return false
+  try {
+    new URL(str)
+    return true
+  } catch (error) {
+    console.error('Invalid URL:', error)
+    return false
   }
 }
 </script>

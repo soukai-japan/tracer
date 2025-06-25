@@ -8,7 +8,7 @@
         class="vocabulary-item"
         @click="goToWordDetail(word.id)"
       >
-        <h3>{{ word.japanese }}</h3>
+        <h3>{{ word.word }}</h3>
         <p>{{ word.meaning }}</p>
         <p class="created-at">{{ new Date(word.createdAt).toLocaleDateString() }}</p>
       </div>

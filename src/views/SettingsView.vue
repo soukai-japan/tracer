@@ -8,6 +8,15 @@
         <label for="siliconflow-api-key">SiliconFlow API Key:</label>
         <input type="password" id="siliconflow-api-key" v-model="siliconflowApiKey" />
       </div>
+      <div class="form-group">
+        <label for="ai-model-input">AI 模型:</label>
+        <input
+          type="text"
+          id="ai-model-input"
+          v-model="selectedAiModel"
+          placeholder="请输入AI模型名称"
+        />
+      </div>
       <button @click="saveSettings">保存设置</button>
     </section>
   </div>
@@ -18,12 +27,14 @@ import { ref, onMounted } from 'vue'
 import { db } from '@/services/db'
 
 const siliconflowApiKey = ref('')
+const selectedAiModel = ref('')
 
 onMounted(async () => {
   // Load settings from IndexedDB
   const settings = await db.settings.get('ai_settings')
   if (settings) {
     siliconflowApiKey.value = settings.siliconflowApiKey || ''
+    selectedAiModel.value = settings.selectedAiModel || ''
   }
 })
 
@@ -31,6 +42,7 @@ const saveSettings = async () => {
   await db.settings.put({
     id: 'ai_settings',
     siliconflowApiKey: siliconflowApiKey.value,
+    selectedAiModel: selectedAiModel.value,
   })
   alert('设置已保存！')
 }
@@ -73,6 +85,15 @@ const saveSettings = async () => {
   border-radius: 5px;
   font-size: 16px;
   box-sizing: border-box; /* Include padding in width */
+}
+
+.form-group input[type='text'] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 16px;
+  box-sizing: border-box;
 }
 
 button {
