@@ -21,9 +21,9 @@ const addForm = reactive({
   passageName: '',
   author: '',
   source: '',
-  content: '',
-  translation: '',
   grammarMeaning: '', // 新增的语法含义字段
+  passageContent: '', // 用于文章内容的临时字段
+  passageTranslation: '', // 用于文章翻译的临时字段
 })
 
 const parseWordWithAI = async (writing: string) => {
@@ -119,8 +119,8 @@ const startQuickAdd = (type: string) => {
   addForm.passageName = ''
   addForm.author = ''
   addForm.source = ''
-  addForm.content = ''
-  addForm.translation = ''
+  addForm.passageContent = ''
+  addForm.passageTranslation = ''
   addForm.selectedTagIds = [] // Reset selected tags
   showAddModal.value = true
 }
@@ -155,14 +155,36 @@ const addNewContent = async () => {
       })
       console.log('Grammar added successfully!')
     } else if (addForm.type === 'passage') {
-      await db.passages.add({
+      const passageId = await db.passages.add({
         name: addForm.passageName,
         author: addForm.author,
         source: addForm.source,
-        content: addForm.content,
-        translation: addForm.translation,
         createdAt: new Date(),
       })
+
+      // 分段保存文章内容
+      const originalSegments = splitContentIntoSegments(addForm.passageContent)
+      for (let i = 0; i < originalSegments.length; i++) {
+        await db.passageContents.add({
+          passageId: passageId,
+          type: 'original',
+          segmentIndex: i,
+          content: originalSegments[i],
+          createdAt: new Date(),
+        })
+      }
+
+      // 分段保存翻译内容
+      const translationSegments = splitContentIntoSegments(addForm.passageTranslation)
+      for (let i = 0; i < translationSegments.length; i++) {
+        await db.passageContents.add({
+          passageId: passageId,
+          type: 'translation',
+          segmentIndex: i,
+          content: translationSegments[i],
+          createdAt: new Date(),
+        })
+      }
       console.log('Passage added successfully!')
     }
     showAddModal.value = false
@@ -226,6 +248,11 @@ const addNewTag = async () => {
     console.error('添加标签失败:', error)
     alert('添加标签失败！')
   }
+}
+
+const splitContentIntoSegments = (content: string): string[] => {
+  // 简单的分段逻辑：按换行符分割，并过滤空行
+  return content.split(/\r?\n/).filter((segment) => segment.trim() !== '')
 }
 
 onMounted(() => {
@@ -356,8 +383,13 @@ onMounted(() => {
               <input type="text" id="passageName" v-model="addForm.passageName" required />
             </div>
             <div class="form-group">
-              <label for="content">内容:</label>
-              <textarea id="content" v-model="addForm.content" rows="5" required></textarea>
+              <label for="passageContent">内容:</label>
+              <textarea
+                id="passageContent"
+                v-model="addForm.passageContent"
+                rows="5"
+                required
+              ></textarea>
             </div>
             <div class="form-group">
               <div class="optional-section" @click="toggleOptionalSection">
@@ -375,8 +407,12 @@ onMounted(() => {
                   <input type="text" id="source" v-model="addForm.source" />
                 </div>
                 <div class="form-group">
-                  <label for="translation">翻译:</label>
-                  <textarea id="translation" v-model="addForm.translation" rows="5"></textarea>
+                  <label for="passageTranslation">翻译:</label>
+                  <textarea
+                    id="passageTranslation"
+                    v-model="addForm.passageTranslation"
+                    rows="5"
+                  ></textarea>
                 </div>
               </div>
             </div>

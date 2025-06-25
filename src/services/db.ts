@@ -36,26 +36,36 @@ export interface Passage {
   name: string
   author?: string
   source?: string
-  content: string
-  translation: string
   createdAt?: Date // 添加创建时间字段
+}
+
+export interface PassageContent {
+  id?: number
+  passageId: number // 关联 Passage 表的 id
+  type: 'original' | 'translation' // 内容类型：原文或翻译
+  segmentIndex: number // 段落索引，用于保持顺序
+  content: string // 段落内容
+  createdAt?: Date
 }
 
 export class MySubClassedDexie extends Dexie {
   words!: Table<Word>
   grammars!: Table<Grammar>
   passages!: Table<Passage>
+  passageContents!: Table<PassageContent> // 新增文章内容表
   settings!: Table<Settings>
   tags!: Table<Tag>
 
   constructor() {
     super('soukaiJapanDatabase')
     this.version(2).stores({
-      words: '++id, &writing, pitch, partOfSpeech, reading, chineseTranslation, example, *tagIds, createdAt',
+      words:
+        '++id, &writing, pitch, partOfSpeech, reading, chineseTranslation, example, *tagIds, createdAt',
       grammars: '++id, &grammar, meaning, usage, example, createdAt',
-      passages: '++id, name, author, source, content, translation, createdAt',
+      passages: '++id, name, author, source, createdAt',
+      passageContents: '++id, passageId, type, segmentIndex, content, createdAt', // 新增文章内容表
       settings: 'id',
-      tags: '++id, &name, type, createdAt' // 新增 tags 表
+      tags: '++id, &name, type, createdAt', // 新增 tags 表
     })
   }
 }

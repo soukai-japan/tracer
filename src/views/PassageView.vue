@@ -14,8 +14,8 @@
           }}</a>
         </h3>
         <h3 v-else>{{ passage.name }}</h3>
-        <p>原文: {{ passage.content }}</p>
-        <p>翻译: {{ passage.translation }}</p>
+        <p class="first-segment">原文: {{ passage.firstSegmentContent }}</p>
+        <p class="first-segment">翻译: {{ passage.firstSegmentTranslation }}</p>
         <p class="created-at">
           {{ passage.createdAt ? new Date(passage.createdAt).toLocaleDateString() : '' }}
         </p>
@@ -62,7 +62,12 @@
           </span>
         </div>
         <div v-else class="original-content">
-          <p>{{ selectedPassage?.content }}</p>
+          <p
+            v-for="(segment, index) in selectedPassage?.content?.split('\n')"
+            :key="'content-' + index"
+          >
+            {{ segment }}
+          </p>
         </div>
       </div>
 
@@ -75,7 +80,15 @@
         <button class="close-button" @click="selectedWord = null">×</button>
       </div>
 
-      <p class="passage-content"><strong>翻译:</strong> {{ selectedPassage?.translation }}</p>
+      <div class="passage-content">
+        <strong>翻译:</strong>
+        <p
+          v-for="(segment, index) in selectedPassage?.translation?.split('\n')"
+          :key="'translation-' + index"
+        >
+          {{ segment }}
+        </p>
+      </div>
       <div class="modal-actions">
         <button @click="editPassage">编辑</button>
         <button @click="deletePassage">删除</button>
@@ -149,7 +162,14 @@ interface TokenData {
   conjugated_form?: string
 }
 
-const passageList = ref<DbPassage[]>([]) // 改为直接存储文章数组
+interface DisplayPassage extends Omit<DbPassage, 'content' | 'translation'> {
+  content: string
+  translation: string
+  firstSegmentContent?: string
+  firstSegmentTranslation?: string
+}
+
+const passageList = ref<DisplayPassage[]>([]) // 改为直接存储文章数组
 const currentPage = ref(1)
 const pageSize = 10
 const hasMorePassages = ref(true)
@@ -180,14 +200,31 @@ const loadPassages = async () => {
       .limit(pageSize)
       .toArray()
 
+    const displayPassages: DisplayPassage[] = []
+    for (const p of newPassages) {
+      if (p.id !== undefined) {
+        const firstSegment = await db.passageContents
+          .where({ passageId: p.id, segmentIndex: 0 })
+          .first()
+        displayPassages.push({
+          ...p,
+          content: '', // 列表页不直接显示完整内容
+          translation: '', // 列表页不直接显示完整翻译
+          firstSegmentContent: firstSegment?.content || '',
+          firstSegmentTranslation: firstSegment?.translation || '',
+        })
+      }
+    }
+    console.log('Loaded passages for list view:', displayPassages)
+
     if (newPassages.length < pageSize) {
       hasMorePassages.value = false
     }
 
     if (currentPage.value === 1) {
-      passageList.value = newPassages
+      passageList.value = displayPassages
     } else {
-      passageList.value = [...passageList.value, ...newPassages]
+      passageList.value = [...passageList.value, ...displayPassages]
     }
 
     currentPage.value++
@@ -210,20 +247,26 @@ const handleScroll = () => {
 }
 
 const showDetailModal = ref(false)
-const selectedPassage = ref<DbPassage | null>(null)
+const selectedPassage = ref<DisplayPassage | null>(null)
 const analyzedTokens = ref<TokenData[]>([])
 const isAnalyzing = ref(false)
 const selectedWord = ref<TokenData | null>(null)
 
 const showEditModal = ref(false)
-const editedPassage = ref<DbPassage | null>(null)
+const editedPassage = ref<DisplayPassage | null>(null)
 
 const goToPassageDetail = async (id: number) => {
   const foundPassage = passageList.value.find((passage) => passage.id === id) || null
-  selectedPassage.value = foundPassage
-  showDetailModal.value = true
-  analyzedTokens.value = []
-  selectedWord.value = null // Clear selected word when navigating to a new passage
+  if (foundPassage) {
+    selectedPassage.value = { ...foundPassage, content: '', translation: '' } // Clear content/translation initially
+    showDetailModal.value = true
+    analyzedTokens.value = []
+    selectedWord.value = null // Clear selected word when navigating to a new passage
+    await loadPassageContent(id) // Load content dynamically
+    console.log('Selected passage for detail view:', selectedPassage.value)
+  } else {
+    selectedPassage.value = null
+  }
 }
 
 const analyzePassage = async (text: string) => {
@@ -303,14 +346,29 @@ const selectWord = (token: TokenData) => {
   selectedWord.value = token
 }
 
+const loadPassageContent = async (passageId: number) => {
+  try {
+    const contents = await db.passageContents.where({ passageId: passageId }).sortBy('segmentIndex')
+
+    if (selectedPassage.value) {
+      selectedPassage.value.content = contents.map((c) => c.content).join('\n')
+      selectedPassage.value.translation = contents.map((c) => c.translation).join('\n')
+    }
+  } catch (error) {
+    console.error('加载文章内容失败:', error)
+  }
+}
+
 const closeDetailModal = () => {
   showDetailModal.value = false
   selectedPassage.value = null
   selectedWord.value = null // Clear selected word when closing modal
 }
 
-const editPassage = () => {
-  if (selectedPassage.value) {
+const editPassage = async () => {
+  if (selectedPassage.value && selectedPassage.value.id !== undefined) {
+    // Ensure selectedPassage.value.content and .translation are up-to-date
+    // This is already handled by loadPassageContent when opening the detail modal
     editedPassage.value = { ...selectedPassage.value } // Copy data for editing
     showEditModal.value = true
   }
@@ -318,10 +376,22 @@ const editPassage = () => {
 
 const saveEdit = async () => {
   if (editedPassage.value && editedPassage.value.id !== undefined) {
+    const { content, translation, ...passageToSave } = editedPassage.value
+
     await db.passages.put({
-      ...editedPassage.value,
-      createdAt: editedPassage.value.createdAt || new Date(), // 如果没有 createdAt，则设置为当前时间
+      ...passageToSave,
+      createdAt: passageToSave.createdAt || new Date(), // 如果没有 createdAt，则设置为当前时间
     })
+
+    if (passageToSave.id !== undefined) {
+      await db.passageContents.put({
+        passageId: passageToSave.id,
+        segmentIndex: 0, // Assuming content is a single segment for now
+        content: content,
+        translation: translation,
+      })
+    }
+
     await loadPassages() // Reload passages after update
     showEditModal.value = false
     closeDetailModal() // Close detail modal after editing
@@ -336,6 +406,7 @@ const cancelEdit = () => {
 const deletePassage = async () => {
   if (selectedPassage.value && selectedPassage.value.id !== undefined) {
     await db.passages.delete(selectedPassage.value.id)
+    await db.passageContents.where({ passageId: selectedPassage.value.id }).delete() // Delete content from passageContents table
     await loadPassages() // Reload passages after deletion
     closeDetailModal()
     console.log('删除文章', selectedPassage.value)
