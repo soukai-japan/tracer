@@ -15,7 +15,6 @@
         </h3>
         <h3 v-else>{{ passage.name }}</h3>
         <p class="first-segment">原文: {{ passage.firstSegmentContent }}</p>
-
         <p class="created-at">
           {{ passage.createdAt ? new Date(passage.createdAt).toLocaleDateString() : '' }}
         </p>

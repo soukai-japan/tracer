@@ -4,34 +4,48 @@
     <p v-if="passage" class="author">作者: {{ passage.author }}</p>
 
     <div v-if="passage" class="passage-analysis">
-      <div class="analysis-header">
-        <h3>原文分析</h3>
-        <button
-          class="analyze-button"
-          @click="analyzePassage(passage?.content || '')"
-          :disabled="isAnalyzing || !passage?.content"
-        >
-          {{ isAnalyzing ? '分析中...' : '开始分析' }}
-        </button>
-      </div>
-      <div v-if="isAnalyzing" class="analyzing-indicator">
-        <span>正在分析文章...</span>
-      </div>
-      <div v-else-if="analyzedTokens.length > 0" class="analyzed-content">
-        <span
-          v-for="(token, index) in analyzedTokens"
-          :key="index"
-          :class="['word-token', getPosColorClass(token.pos)]"
-          @click="selectWord(token)"
-        >
-          {{ token.word }}
-          <span class="furigana" v-if="token.furigana">{{ token.furigana }}</span>
-        </span>
-      </div>
-      <div v-else class="original-content">
-        <p v-for="(segment, index) in passage?.content?.split('\n')" :key="'content-' + index">
-          {{ segment }}
-        </p>
+      <div class="original-content">
+        <div class="passage-content-wrapper">
+          <button @click="prevPage" :disabled="currentPage === 0" class="nav-button left-nav">
+            <span class="triangle left"></span>
+          </button>
+          <div class="passage-segments">
+            <p
+              v-for="(segment, index) in currentSegments"
+              :key="'current-segment-' + index"
+              class="passage-segment-item"
+              @click="analyzePassageForSegment(index)"
+            >
+              <template v-if="analyzedSegmentData.has(index)">
+                <span
+                  v-for="(token, tokenIndex) in analyzedSegmentData.get(index)"
+                  :key="'token-' + index + '-' + tokenIndex"
+                  :class="['word-token', getPosColorClass(token.pos)]"
+                  @click.stop="selectWord(token)"
+                >
+                  {{ token.word }}
+                  <span class="furigana" v-if="token.furigana">{{ token.furigana }}</span>
+                </span>
+              </template>
+              <template v-else-if="loadingSegments.get(index)">
+                {{ segment }} <span class="loading-spinner"></span>
+              </template>
+              <template v-else>
+                {{ segment }}
+              </template>
+            </p>
+          </div>
+          <button
+            @click="nextPage"
+            :disabled="currentPage >= totalPages - 1"
+            class="nav-button right-nav"
+          >
+            <span class="triangle right"></span>
+          </button>
+        </div>
+        <div class="page-indicator">
+          <span>{{ currentPage + 1 }} / {{ totalPages }}</span>
+        </div>
       </div>
     </div>
 
@@ -48,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { db } from '@/services/db'
 import type { Passage as DbPassage } from '@/services/db'
@@ -72,27 +86,50 @@ interface DisplayPassage extends Omit<DbPassage, 'content' | 'translation'> {
 const route = useRoute()
 const router = useRouter()
 const passage = ref<DisplayPassage | null>(null)
-const analyzedTokens = ref<TokenData[]>([])
-const isAnalyzing = ref(false)
+
 const selectedWord = ref<TokenData | null>(null)
+const currentPage = ref(0) // 当前页码，从0开始
+const segmentsPerPage = 4 // 每页显示的段落数
+const totalSegmentsCount = ref(0) // 文章总段落数
+const currentSegments = ref<string[]>([]) // 当前页显示的段落
 
 const loadPassageDetail = async (id: number) => {
   try {
     const dbPassage = await db.passages.get(id)
     if (dbPassage) {
-      const contents = await db.passageContents.where({ passageId: id }).sortBy('segmentIndex')
       passage.value = {
         ...dbPassage,
-        content: contents.map((c) => c.content).join('\n'),
-        translation: contents.map((c) => c.translation).join('\n'),
+        content: '', // 内容将通过分页加载填充
+        translation: '', // 翻译内容已移除，但接口仍需要
       }
+      totalSegmentsCount.value = await db.passageContents.where({ passageId: id }).count()
+      await loadPageContent(id, currentPage.value)
     } else {
-      passage.value = null // Ensure it's null if not found
+      passage.value = null
       console.warn(`Passage with ID ${id} not found in database.`)
     }
   } catch (error) {
     console.error('加载文章详情失败:', error)
-    passage.value = null // Also set to null on error
+    passage.value = null
+  }
+}
+
+const loadPageContent = async (passageId: number, page: number) => {
+  try {
+    // 清空已分析的段落数据和加载状态
+    analyzedSegmentData.value.clear()
+    loadingSegments.value.clear()
+
+    const offset = page * segmentsPerPage
+    const segments = await db.passageContents
+      .where({ passageId: passageId })
+      .offset(offset)
+      .limit(segmentsPerPage)
+      .sortBy('segmentIndex')
+    currentSegments.value = segments.map((s) => s.content)
+  } catch (error) {
+    console.error(`加载第 ${page} 页内容失败:`, error)
+    currentSegments.value = []
   }
 }
 
@@ -103,16 +140,36 @@ watch(
   async (newId) => {
     if (newId) {
       passageId.value = Number(newId)
+      currentPage.value = 0 // Reset to first page on passage change
       await loadPassageDetail(passageId.value)
     }
   },
   { immediate: true },
 )
 
-const analyzePassage = async (text: string) => {
-  if (!text) return
-  isAnalyzing.value = true
-  analyzedTokens.value = []
+const analyzedSegmentData = ref<Map<number, TokenData[]>>(new Map())
+const loadingSegments = ref<Map<number, boolean>>(new Map())
+
+const analyzePassageForSegment = async (index: number) => {
+  const segmentText = currentSegments.value[index]
+  if (!segmentText) return
+
+  loadingSegments.value.set(index, true) // 设置当前段落为加载中
+
+  try {
+    const tokens = await analyzePassage(segmentText)
+    analyzedSegmentData.value.set(index, tokens)
+  } catch (error) {
+    console.error('分析段落失败:', error)
+    // 可以选择在这里显示错误信息或保持原始文本
+  } finally {
+    loadingSegments.value.set(index, false) // 分析完成，移除加载状态
+  }
+}
+
+const analyzePassage = async (segmentText: string): Promise<TokenData[]> => {
+  const text = segmentText
+  if (!text) return []
 
   try {
     const settings = await db.settings.get('ai_settings')
@@ -159,31 +216,49 @@ const analyzePassage = async (text: string) => {
         throw new Error(`API请求失败: ${response.statusText}`)
       }
 
-      const result = await response.json()
-      let responseContent = result.choices[0].message.content
+      const data = await response.json()
+      let responseContent = data.choices[0].message.content
 
       try {
         const jsonMatch = responseContent.match(/```json\n([\s\S]*?)\n```/)
         if (jsonMatch && jsonMatch[1]) {
           responseContent = jsonMatch[1]
         }
-        const parsedTokens = JSON.parse(responseContent)
+        const parsedTokens = JSON.parse(responseContent) as TokenData[]
         allTokens = allTokens.concat(parsedTokens)
       } catch (error) {
         console.error('解析分词结果失败:', error, responseContent)
       }
     }
-    analyzedTokens.value = allTokens
+    return allTokens
   } catch (error) {
     console.error('分析文章失败:', error)
     alert('分析文章失败，请稍后重试')
-  } finally {
-    isAnalyzing.value = false
+    return []
   }
 }
 
 const selectWord = (token: TokenData) => {
   selectedWord.value = token
+}
+const totalPages = computed(() => Math.ceil(totalSegmentsCount.value / segmentsPerPage))
+
+const prevPage = async () => {
+  if (currentPage.value > 0) {
+    currentPage.value--
+    if (passageId.value) {
+      await loadPageContent(passageId.value, currentPage.value)
+    }
+  }
+}
+
+const nextPage = async () => {
+  if (currentPage.value < totalPages.value - 1) {
+    currentPage.value++
+    if (passageId.value) {
+      await loadPageContent(passageId.value, currentPage.value)
+    }
+  }
 }
 
 const goBack = () => {
@@ -214,6 +289,93 @@ const getPosColorClass = (pos: string) => {
   padding: 20px;
   max-width: 800px;
   margin: 0 auto;
+  height: 100vh; /* 固定高度为视口高度 */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between; /* 使内容和按钮在垂直方向上分散 */
+}
+
+.original-content {
+  flex-grow: 1; /* 让内容区域填充可用空间 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* 垂直居中内容 */
+  align-items: center; /* 水平居中内容 */
+}
+
+.passage-content-wrapper {
+  display: flex;
+  align-items: center; /* 垂直居中按钮和内容 */
+  width: 100%;
+  flex-grow: 1;
+}
+
+.passage-segments {
+  flex-grow: 1;
+  padding: 0 20px; /* 按钮和内容之间的间距 */
+  text-align: justify;
+  overflow-y: hidden; /* 移除滚动条 */
+  height: 100%; /* 确保内容区域填充可用空间 */
+}
+
+.nav-button {
+  background-color: transparent; /* 按钮背景透明 */
+  border: none;
+  cursor: pointer;
+  font-size: 2em; /* 调整字体大小以适应三角形 */
+  color: #007bff; /* 三角形颜色 */
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px; /* 调整内边距 */
+}
+
+.nav-button:disabled {
+  cursor: not-allowed;
+}
+
+.triangle {
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+
+.triangle.left {
+  border-width: 15px 20px 15px 0;
+  border-color: transparent #007bff transparent transparent;
+}
+
+.triangle.right {
+  border-width: 15px 0 15px 20px;
+  border-color: transparent transparent transparent #007bff;
+}
+
+.nav-button:disabled .triangle.left {
+  border-color: transparent #999999 transparent transparent;
+}
+
+.nav-button:disabled .triangle.right {
+  border-color: transparent transparent transparent #999999;
+}
+
+.nav-button:disabled {
+  cursor: not-allowed;
+}
+
+.left-nav {
+  margin-right: auto; /* 将按钮推到最左边 */
+}
+
+.right-nav {
+  margin-left: auto; /* 将按钮推到最右边 */
+}
+
+.page-indicator {
+  text-align: center;
+  margin-top: 10px;
+  font-size: 1.1em;
+  color: #555;
 }
 
 .passage-content-view h1 {
@@ -224,7 +386,7 @@ const getPosColorClass = (pos: string) => {
 .passage-content-view .author {
   color: #666;
   font-style: italic;
-  margin-bottom: 20px;
+  margin-bottom: 0px;
 }
 
 .passage-analysis {
@@ -272,8 +434,24 @@ const getPosColorClass = (pos: string) => {
   font-size: 1.1em;
   color: #333;
   padding: 10px;
-  background-color: #fff;
+  background-color: transparent; /* 将背景色设置为透明 */
   border-radius: 4px;
+}
+
+.passage-segment-item {
+  cursor: pointer;
+  transition:
+    box-shadow 0.3s ease,
+    background-color 0.3s ease;
+  background-color: #fff; /* 为每个段落项添加背景色 */
+  margin-bottom: 10px; /* 增加段落之间的间距 */
+  padding: 10px; /* 增加内边距 */
+  border-radius: 4px;
+}
+
+.passage-segment-item:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15); /* 调整阴影效果 */
+  background-color: #f0f0f0; /* 悬停时背景色变浅 */
 }
 
 .analyzed-content {
@@ -285,7 +463,7 @@ const getPosColorClass = (pos: string) => {
   position: relative;
   display: inline-block;
   margin: 8px 2px;
-  padding: 2px 4px;
+  padding: 2px 8px;
   cursor: default;
   border-radius: 3px;
   transition: background-color 0.2s;
@@ -408,6 +586,30 @@ const getPosColorClass = (pos: string) => {
   color: #e05090;
 }
 
+.loading-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  border-top-color: #007bff;
+  animation: spin 1s ease-in-out infinite;
+  -webkit-animation: spin 1s ease-in-out infinite;
+  vertical-align: middle;
+  margin-left: 0.5em;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@-webkit-keyframes spin {
+  to {
+    -webkit-transform: rotate(360deg);
+  }
+}
+
 .word-detail-popup h3 {
   margin-top: 0;
   color: #333;
@@ -453,9 +655,5 @@ button {
   border-radius: 5px;
   cursor: pointer;
   transition: background-color 0.2s;
-}
-
-button:hover {
-  background-color: #5a6268;
 }
 </style>
