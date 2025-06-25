@@ -181,6 +181,15 @@ const addNewContent = async () => {
   }
 }
 
+const toggleTagSelection = (tagId: number) => {
+  const index = addForm.selectedTagIds.indexOf(tagId)
+  if (index > -1) {
+    addForm.selectedTagIds.splice(index, 1) // Remove tag
+  } else {
+    addForm.selectedTagIds.push(tagId) // Add tag
+  }
+}
+
 const closeModal = () => {
   showAddModal.value = false
 }
@@ -293,12 +302,18 @@ onMounted(() => {
                   <textarea id="example" v-model="addForm.example" rows="3"></textarea>
                 </div>
                 <div class="form-group tags-section">
-                  <label for="tags">标签:</label>
-                  <select id="tags" v-model="addForm.selectedTagIds" multiple class="tag-selector">
-                    <option v-for="tag in availableTags" :key="tag.id" :value="tag.id">
+                  <label>标签:</label>
+                  <div class="tag-container">
+                    <div
+                      v-for="tag in availableTags"
+                      :key="tag.id"
+                      class="tag-item"
+                      :class="{ 'tag-selected': addForm.selectedTagIds.includes(tag.id) }"
+                      @click="toggleTagSelection(tag.id)"
+                    >
                       {{ tag.name }}
-                    </option>
-                  </select>
+                    </div>
+                  </div>
                   <div class="add-tag-container">
                     <input
                       type="text"
@@ -483,8 +498,9 @@ button:hover {
   border-radius: 10px;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
   width: 90%;
-  max-width: 500px;
-  animation: fadeInScale 0.3s ease-out;
+  max-width: 600px; /* 调整最大宽度 */
+  max-height: 80vh; /* 设置最大高度为视口高度的80% */
+  overflow-y: auto; /* 当内容超出时显示垂直滚动条 */
 }
 
 .modal-content h3 {
@@ -620,6 +636,7 @@ button:hover {
 
 .tags-section {
   margin-top: 15px;
+  margin-bottom: 20px; /* 为标签部分添加底部间距 */
 }
 
 .tag-selector {
@@ -638,21 +655,63 @@ button:hover {
 
 .tag-input {
   flex: 1;
-  padding: 8px;
+  padding: 8px 12px;
   border: 1px solid #ddd;
-  border-radius: 5px;
+  border-radius: 4px;
 }
 
 .add-tag-button {
-  padding: 8px 15px;
-  background-color: #28a745;
+  padding: 0 15px;
+  background-color: #fb7299;
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 4px;
   cursor: pointer;
 }
 
 .add-tag-button:hover {
   background-color: #218838;
+}
+
+.tag-label {
+  padding: 6px 12px;
+  background-color: #f1f1f1;
+  border-radius: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid #e0e0e0;
+  color: #555;
+  white-space: nowrap; /* Prevent text wrapping inside the tag */
+}
+
+.tag-selected {
+  background-color: #fb7299;
+  color: white;
+  border-color: #fb7299;
+}
+
+.tag-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-item {
+  padding: 6px 12px;
+  background-color: #f0f0f0;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid #ddd;
+}
+
+.tag-item:hover {
+  background-color: #e0e0e0;
+}
+
+.tag-selected {
+  background-color: #ff85c0;
+  color: white;
+  border-color: #ff85c0;
 }
 </style>

@@ -1,16 +1,51 @@
 <template>
   <div class="vocabulary-view">
     <h1>日语单词学习</h1>
+    <div class="tag-filter-container">
+      <span
+        class="tag-filter-item"
+        :class="{ active: filterTagId === undefined }"
+        @click="filterTagId = undefined"
+        >全部</span
+      >
+      <span
+        class="tag-filter-item"
+        :class="{ active: filterTagId === -1 }"
+        @click="filterTagId = -1"
+        >未分类</span
+      >
+      <span
+        v-for="tag in allTags"
+        :key="tag.id"
+        class="tag-filter-item"
+        :class="{ active: filterTagId === tag.id }"
+        @click="tag.id !== undefined && (filterTagId = tag.id)"
+      >
+        {{ tag.name }}
+        <span
+          v-if="tag.id !== undefined"
+          class="delete-tag-button filter-tag-delete-button"
+          @click.stop="deleteTag(tag.id)"
+          >x</span
+        >
+      </span>
+    </div>
     <div class="vocabulary-list">
       <div
-        v-for="word in vocabularyList"
+        v-for="word in filteredVocabularyList"
         :key="word.id"
         class="vocabulary-item"
-        @click="goToWordDetail(word.id)"
+        @click="word.id !== undefined && goToWordDetail(word.id)"
       >
         <h3>{{ word.writing }}</h3>
         <p>{{ word.chineseTranslation }}</p>
-        <p class="created-at">{{ new Date(word.createdAt).toLocaleDateString() }}</p>
+        <p class="created-at">
+          {{ word.createdAt ? new Date(word.createdAt).toLocaleDateString() : 'N/A' }}
+        </p>
+        <div class="word-tags">
+          <span v-for="tag in word.tags" :key="tag.id" class="tag-pill">{{ tag.name }}</span>
+          <span v-if="!word.tags || word.tags.length === 0" class="tag-pill untagged">未分类</span>
+        </div>
       </div>
     </div>
   </div>
@@ -19,7 +54,7 @@
   <div v-if="showDetailModal" class="modal-overlay" @click.self="closeDetailModal">
     <div class="modal-content">
       <h2>{{ selectedWord?.writing }}</h2>
-      <p><strong>ID:</strong> {{ selectedWord?.id ?? 'N/A' }}</p>
+      <p><strong>ID:</strong> {{ selectedWord?.id !== undefined ? selectedWord.id : 'N/A' }}</p>
       <p><strong>读法:</strong> {{ selectedWord?.reading }}</p>
       <p><strong>汉语翻译:</strong> {{ selectedWord?.chineseTranslation }}</p>
       <p>
@@ -85,14 +120,34 @@
 
         <div class="form-group">
           <label for="edit-tags">标签 (可选):</label>
-          <select id="edit-tags" v-model="editedWord!.tagIds" multiple>
-            <option v-for="tag in availableTags" :key="tag.id" :value="tag.id">
-              {{ tag.name }}
-            </option>
-          </select>
-          <div class="add-tag-container">
-            <input type="text" v-model="newTagName" placeholder="新标签名称" />
-            <button type="button" @click="addNewTag">添加标签</button>
+          <div class="form-group tags-section">
+            <label>标签:</label>
+            <div class="tag-container">
+              <div
+                v-for="tag in availableTags"
+                :key="tag.id"
+                class="tag-item"
+                :class="{
+                  'tag-selected':
+                    editedWord!.tagIds &&
+                    tag.id !== undefined &&
+                    editedWord!.tagIds.includes(tag.id),
+                }"
+                @click="tag.id !== undefined && toggleTagSelection(tag.id)"
+              >
+                {{ tag.name }}
+                <span
+                  v-if="tag.id !== undefined"
+                  class="delete-tag-button"
+                  @click.stop="deleteTag(tag.id)"
+                  >x</span
+                >
+              </div>
+            </div>
+            <div class="add-tag-container">
+              <input type="text" v-model="newTagName" placeholder="新标签名称" class="tag-input" />
+              <button type="button" @click="addNewTag" class="add-tag-button">+</button>
+            </div>
           </div>
         </div>
         <div class="modal-actions">
@@ -105,19 +160,54 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { db } from '@/services/db'
 import type { Word, Tag } from '@/services/db'
 
-const vocabularyList = ref<Word[]>([])
+interface WordWithTags extends Word {
+  tags?: Tag[]
+}
+
+const vocabularyList = ref<WordWithTags[]>([])
+const allTags = ref<Tag[]>([])
+const filterTagId = ref<number | undefined>(undefined)
 
 onMounted(async () => {
   await loadWords()
+  await loadAllTags()
 })
 
 const loadWords = async () => {
-  vocabularyList.value = await db.words.orderBy('createdAt').reverse().toArray() // 直接获取单词数组
+  const words = await db.words.orderBy('createdAt').reverse().toArray()
+  vocabularyList.value = await Promise.all(
+    words.map(async (word) => {
+      if (word.tagIds && word.tagIds.length > 0) {
+        const tags = await db.tags.where('id').anyOf(word.tagIds).toArray()
+        return { ...word, tags }
+      }
+      return word
+    }),
+  )
 }
+
+const loadAllTags = async () => {
+  allTags.value = await db.tags.where('type').equals('vocabulary').toArray()
+}
+
+const filteredVocabularyList = computed(() => {
+  if (!filterTagId.value) {
+    return vocabularyList.value
+  }
+  return vocabularyList.value.filter((word) => {
+    if (filterTagId.value === -1) {
+      // -1 for "未分类"
+      return !word.tagIds || word.tagIds.length === 0
+    } else if (filterTagId.value !== undefined) {
+      return word.tagIds && word.tagIds.includes(filterTagId.value)
+    }
+    return true // Should not happen if filterTagId.value is properly handled
+  })
+})
 
 const showDetailModal = ref(false)
 const selectedWord = ref<Word | null>(null)
@@ -127,6 +217,36 @@ const showEditModal = ref(false)
 const editedWord = ref<Word | null>(null)
 const availableTags = ref<Tag[]>([])
 const newTagName = ref('')
+
+const deleteTag = async (tagId: number) => {
+  const associatedWords = await db.words.where('tagIds').equals(tagId).toArray()
+
+  if (associatedWords.length > 0) {
+    const confirmDelete = confirm(
+      '标签存在关联的单词，删除标签则清空所有关联单词的标签。确定删除吗？',
+    )
+    if (!confirmDelete) {
+      return
+    }
+
+    // Clear tag from associated words
+    for (const word of associatedWords) {
+      if (word.tagIds) {
+        word.tagIds = word.tagIds.filter((id) => id !== tagId)
+        await db.words.put(word)
+      }
+    }
+  }
+
+  // Delete the tag itself
+  await db.tags.delete(tagId)
+
+  // Force reactive updates
+  availableTags.value = availableTags.value.filter((tag) => tag.id !== tagId)
+
+  await loadAllTags()
+  await loadWords() // Reload words to reflect tag changes
+}
 
 const goToWordDetail = async (id: number) => {
   const foundWord = vocabularyList.value.find((word) => word.id === id) || null
@@ -155,14 +275,30 @@ const editWord = async () => {
 
 const saveEdit = async () => {
   if (editedWord.value && editedWord.value.id !== undefined) {
-    await db.words.put({
-      ...editedWord.value,
-      createdAt: editedWord.value.createdAt || new Date(),
-      tagIds: editedWord.value.tagIds || [],
-    })
-    showEditModal.value = false
-    editedWord.value = null
-    await loadWords() // Reload words after update
+    // Create a plain object with all necessary fields
+    const wordToSave: Word = {
+      id: editedWord.value.id !== undefined ? Number(editedWord.value.id) : undefined,
+      writing: String(editedWord.value.writing),
+      reading: editedWord.value.reading ? String(editedWord.value.reading) : '',
+      chineseTranslation: editedWord.value.chineseTranslation
+        ? String(editedWord.value.chineseTranslation)
+        : '',
+      createdAt: editedWord.value.createdAt ? new Date(editedWord.value.createdAt) : new Date(),
+      tagIds: Array.isArray(editedWord.value.tagIds)
+        ? editedWord.value.tagIds.map((id) => Number(id))
+        : [],
+      // Add any other necessary fields here
+    }
+
+    try {
+      await db.words.put(wordToSave)
+      showEditModal.value = false
+      editedWord.value = null
+      await loadWords() // Reload words after update
+      await loadAllTags() // Reload all tags after word update
+    } catch (error) {
+      console.error('Error saving word:', error)
+    }
   }
 }
 
@@ -182,6 +318,20 @@ const deleteWord = async () => {
 
 const loadTags = async () => {
   availableTags.value = await db.tags.where('type').equals('vocabulary').toArray()
+}
+
+const toggleTagSelection = (tagId: number) => {
+  if (editedWord.value) {
+    const index = editedWord.value.tagIds?.indexOf(tagId) ?? -1
+    if (index > -1) {
+      editedWord.value.tagIds?.splice(index, 1) // Remove tag
+    } else {
+      if (!editedWord.value.tagIds) {
+        editedWord.value.tagIds = []
+      }
+      editedWord.value.tagIds.push(tagId) // Add tag
+    }
+  }
 }
 
 const addNewTag = async () => {
@@ -216,6 +366,7 @@ const addNewTag = async () => {
     }
     newTagName.value = ''
     await loadTags() // Reload tags after adding new one
+    await loadAllTags() // Reload all tags to update filter list
   } catch (error: unknown) {
     console.error('添加标签失败:', error)
     alert('添加标签失败！')
@@ -227,8 +378,65 @@ const addNewTag = async () => {
 .vocabulary-view {
   padding: 20px;
 }
+.tag-filter-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.tag-filter-item {
+  padding: 8px 15px;
+  border: 1px solid #007bff;
+  border-radius: 20px;
+  cursor: pointer;
+  background-color: #e7f3ff;
+  color: #007bff;
+  transition: all 0.3s ease;
+}
+
+.tag-filter-item:hover {
+  background-color: #cce5ff;
+}
+
+.tag-filter-item.active {
+  background-color: #007bff;
+  color: white;
+}
+
+.filter-tag-delete-button {
+  display: none;
+  margin-left: 5px;
+  color: #dc3545;
+  font-weight: bold;
+}
+
+.tag-filter-item:hover .filter-tag-delete-button {
+  display: inline;
+}
+
 .vocabulary-list {
   margin: 20px 0;
+}
+
+.word-tags {
+  margin-top: 10px;
+}
+
+.tag-pill {
+  display: inline-block;
+  padding: 5px 10px;
+  background-color: #f0f0f0;
+  border-radius: 15px;
+  font-size: 0.8em;
+  margin-right: 5px;
+  margin-bottom: 5px;
+  color: #555;
+}
+
+.tag-pill.untagged {
+  background-color: #ffcccc;
+  color: #cc0000;
 }
 .vocabulary-item {
   padding: 10px;
@@ -253,6 +461,65 @@ const addNewTag = async () => {
 /* Modal Styles */
 .form-group {
   margin-bottom: 15px;
+}
+
+.tags-section {
+  margin-bottom: 20px;
+}
+
+.tag-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  margin-bottom: 15px;
+}
+
+.tag-item {
+  padding: 8px 15px;
+  border: 1px solid #007bff;
+  border-radius: 20px;
+  cursor: pointer;
+  background-color: #e7f3ff;
+  color: #007bff;
+  transition: all 0.3s ease;
+}
+
+.tag-item:hover {
+  background-color: #cce5ff;
+}
+
+.tag-item.tag-selected {
+  background-color: #ff69b4; /* Pink for selected tags */
+  color: white;
+  border-color: #ff69b4;
+}
+
+.add-tag-container {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.tag-input {
+  flex-grow: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+
+.add-tag-button {
+  padding: 8px 12px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.add-tag-button:hover {
+  background-color: #218838;
 }
 
 .form-group label {
