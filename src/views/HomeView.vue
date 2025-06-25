@@ -308,8 +308,11 @@ onMounted(() => {
                       v-for="tag in availableTags"
                       :key="tag.id"
                       class="tag-item"
-                      :class="{ 'tag-selected': addForm.selectedTagIds.includes(tag.id) }"
-                      @click="toggleTagSelection(tag.id)"
+                      :class="{
+                        'tag-selected':
+                          tag.id !== undefined && addForm.selectedTagIds.includes(tag.id),
+                      }"
+                      @click="tag.id !== undefined && toggleTagSelection(tag.id)"
                     >
                       {{ tag.name }}
                     </div>
@@ -353,20 +356,29 @@ onMounted(() => {
               <input type="text" id="passageName" v-model="addForm.passageName" required />
             </div>
             <div class="form-group">
-              <label for="author">作者 (可选):</label>
-              <input type="text" id="author" v-model="addForm.author" />
-            </div>
-            <div class="form-group">
-              <label for="source">来源 (可选):</label>
-              <input type="text" id="source" v-model="addForm.source" />
-            </div>
-            <div class="form-group">
               <label for="content">内容:</label>
               <textarea id="content" v-model="addForm.content" rows="5" required></textarea>
             </div>
             <div class="form-group">
-              <label for="translation">翻译:</label>
-              <textarea id="translation" v-model="addForm.translation" rows="5" required></textarea>
+              <div class="optional-section" @click="toggleOptionalSection">
+                <h4>
+                  可选信息 <span class="toggle-icon">{{ showOptionalSection ? '▼' : '▶' }}</span>
+                </h4>
+              </div>
+              <div v-if="showOptionalSection" class="optional-fields">
+                <div class="form-group">
+                  <label for="author">作者:</label>
+                  <input type="text" id="author" v-model="addForm.author" />
+                </div>
+                <div class="form-group">
+                  <label for="source">来源:</label>
+                  <input type="text" id="source" v-model="addForm.source" />
+                </div>
+                <div class="form-group">
+                  <label for="translation">翻译:</label>
+                  <textarea id="translation" v-model="addForm.translation" rows="5"></textarea>
+                </div>
+              </div>
             </div>
           </template>
           <div class="modal-actions">
