@@ -39,6 +39,12 @@ const router = createRouter({
       name: 'passage',
       component: () => import('../views/PassageView.vue'),
     },
+    {
+      path: '/passage/:id',
+      name: 'passage-content',
+      component: () => import('../views/PassageContentView.vue'),
+      props: true,
+    },
   ],
 })
 
