@@ -19,6 +19,11 @@
       </div>
       <button @click="saveSettings">保存设置</button>
     </section>
+
+    <section class="settings-section">
+      <h2>数据管理</h2>
+      <button @click="exportData">导出所有数据</button>
+    </section>
   </div>
 </template>
 
@@ -45,6 +50,30 @@ const saveSettings = async () => {
     selectedAiModel: selectedAiModel.value,
   })
   alert('设置已保存！')
+}
+
+const exportData = async () => {
+  try {
+    const allData = {
+      words: await db.words.toArray(),
+      grammars: await db.grammars.toArray(),
+      passages: await db.passages.toArray(),
+      settings: await db.settings.toArray(),
+    }
+    const dataStr = JSON.stringify(allData, null, 2)
+    const blob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `soukai_japan_data_${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('导出数据失败:', error)
+    alert('导出数据失败，请查看控制台了解详情。')
+  }
 }
 </script>
 
