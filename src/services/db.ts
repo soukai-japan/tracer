@@ -55,6 +55,7 @@ export class MySubClassedDexie extends Dexie {
   passageContents!: Table<PassageContent> // 新增文章内容表
   settings!: Table<Settings>
   tags!: Table<Tag>
+  ankiDailyReviews!: Table<AnkiDailyReview>
 
   constructor() {
     super('soukaiJapanDatabase')
@@ -66,14 +67,23 @@ export class MySubClassedDexie extends Dexie {
       passageContents: '++id, passageId, type, segmentIndex, content, createdAt', // 新增文章内容表
       settings: 'id',
       tags: '++id, &name, type, createdAt', // 新增 tags 表
+      ankiDailyReviews: '++id, &date, reviewedCards, createdAt',
     })
   }
+}
+
+export interface AnkiDailyReview {
+  id?: number
+  date: string // YYYY-MM-DD 格式的日期
+  reviewedCards: number
+  createdAt?: Date
 }
 
 export interface Settings {
   id: string // e.g., 'ai_settings'
   siliconflowApiKey?: string
   selectedAiModel?: string // 新增字段，用于存储用户选择的AI模型
+  ankiConnectUrl?: string // Anki Connect 的 URL
 }
 
 export const db = new MySubClassedDexie()

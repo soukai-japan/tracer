@@ -64,11 +64,7 @@
         <input type="text" id="modal-deck-name" v-model="currentEditingDeck!.name" />
       </div>
       <h4>Field 关键字配置</h4>
-      <div
-        v-for="(field, fieldIndex) in currentEditingDeck?.fields"
-        :key="field.id"
-        class="field-config-item"
-      >
+      <div v-for="field in currentEditingDeck?.fields" :key="field.id" class="field-config-item">
         <div class="form-group field-input-group">
           <input
             type="text"
@@ -108,6 +104,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { db } from '@/services/db'
+import { syncAnkiDailyReviews } from '@/services/anki-sync'
 
 const siliconflowApiKey = ref('')
 const selectedAiModel = ref('')
@@ -163,9 +160,15 @@ const saveDeckChanges = () => {
   closeModal()
 }
 
-const manualSync = () => {
-  // TODO: 实现手动同步 Anki 的逻辑
+const manualSync = async () => {
   console.log('手动同步 Anki')
+  try {
+    await syncAnkiDailyReviews()
+    alert('Anki 同步完成！')
+  } catch (error) {
+    console.error('Anki 同步失败:', error)
+    alert('Anki 同步失败，请检查 Anki Connect 是否运行以及 URL 配置是否正确。')
+  }
 }
 
 const closeModal = () => {
@@ -175,10 +178,10 @@ const closeModal = () => {
 
 onMounted(async () => {
   // Load settings from IndexedDB
-  const settings = await db.settings.get('ai_settings')
-  if (settings) {
-    siliconflowApiKey.value = settings.siliconflowApiKey || ''
-    selectedAiModel.value = settings.selectedAiModel || ''
+  const aiSettings = await db.settings.get('ai_settings')
+  if (aiSettings) {
+    siliconflowApiKey.value = aiSettings.siliconflowApiKey || ''
+    selectedAiModel.value = aiSettings.selectedAiModel || ''
   }
   const ankiSettings = await db.settings.get('anki_settings')
   if (ankiSettings) {
@@ -186,7 +189,7 @@ onMounted(async () => {
     autoSyncInterval.value = ankiSettings.autoSyncInterval || 5 // 加载自动同步间隔
     // 确保加载的数据结构与新的 AnkiFieldConfig 匹配
     ankiDecks.value =
-      ankiSettings.ankiDecks.map((deck: any) => ({
+      ankiSettings.ankiDecks?.map((deck: AnkiDeckConfig) => ({
         ...deck,
         fields: Object.entries(deck.fields || {}).map(([key, value]) => ({
           id:
@@ -198,20 +201,6 @@ onMounted(async () => {
       })) || []
   }
 })
-
-const addDeck = () => {
-  ankiDecks.value.push({
-    name: '',
-    fields: [
-      {
-        id:
-          Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
-        key: 'field1',
-        value: '',
-      },
-    ],
-  })
-}
 
 const removeDeck = (index: number) => {
   ankiDecks.value.splice(index, 1)
@@ -247,11 +236,6 @@ const updateFieldKey = (deck: AnkiDeckConfig, fieldId: string, newKey: string) =
 }
 
 const saveSettings = async () => {
-  await db.settings.put({
-    id: 'ai_settings',
-    siliconflowApiKey: siliconflowApiKey.value,
-    selectedAiModel: selectedAiModel.value,
-  })
   // 将 ankiDecks 转换回 Record<string, string> 格式进行保存
   const ankiDecksToSave = ankiDecks.value.map((deck) => {
     const fieldsRecord: Record<string, string> = {}
@@ -263,6 +247,14 @@ const saveSettings = async () => {
       fields: fieldsRecord,
     }
   })
+
+  await db.settings.put({
+    id: 'ai_settings',
+    siliconflowApiKey: siliconflowApiKey.value,
+    selectedAiModel: selectedAiModel.value,
+  })
+
+  // 保存 Anki 设置
   await db.settings.put({
     id: 'anki_settings',
     ankiConnectUrl: ankiConnectUrl.value,
