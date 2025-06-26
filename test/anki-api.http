@@ -3,7 +3,7 @@ content-type: application/json
 
 {"action": "deckNamesAndIds", "version": 6}
 
-###
+### 获取今天复习的卡片数（不是学习的数量、不准！）
 
 POST http://127.0.0.1:8765
 content-type: application/json
@@ -47,13 +47,14 @@ content-type: application/json
     "params": {
         "cards": [
         1706102393680,
-        1706102393681,
-        1706102393682,
         1706102393683,
         1706102393684,
         1706102393685,
         1706102393686,
-        1706102393687
+        1706102393687,
+        1709544226545,
+        1709544226547,
+        1709544226549
         ]
     }
 }
