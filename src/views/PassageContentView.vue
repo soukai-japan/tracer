@@ -9,7 +9,7 @@
           <button @click="prevPage" :disabled="currentPage === 0" class="nav-button left-nav">
             <span class="triangle left"></span>
           </button>
-          <div class="passage-segments">
+          <div class="passage-segments" ref="passageSegmentsRef">
             <p
               v-for="(segment, index) in currentSegments"
               :key="'current-segment-' + index"
@@ -243,8 +243,16 @@ const selectWord = (token: TokenData) => {
 }
 const totalPages = computed(() => Math.ceil(totalSegmentsCount.value / segmentsPerPage))
 
+const passageSegmentsRef = ref(null)
+
 const prevPage = async () => {
   if (currentPage.value > 0) {
+    if (passageSegmentsRef.value) {
+      passageSegmentsRef.value.classList.add('animate-left')
+      setTimeout(() => {
+        passageSegmentsRef.value.classList.remove('animate-left')
+      }, 500)
+    }
     currentPage.value--
     if (passageId.value) {
       await loadPageContent(passageId.value, currentPage.value)
@@ -254,6 +262,12 @@ const prevPage = async () => {
 
 const nextPage = async () => {
   if (currentPage.value < totalPages.value - 1) {
+    if (passageSegmentsRef.value) {
+      passageSegmentsRef.value.classList.add('animate-right')
+      setTimeout(() => {
+        passageSegmentsRef.value.classList.remove('animate-right')
+      }, 500)
+    }
     currentPage.value++
     if (passageId.value) {
       await loadPageContent(passageId.value, currentPage.value)
@@ -480,6 +494,44 @@ const getPosColorClass = (pos: string) => {
   top: -1.2em;
   left: 0;
   right: 0;
+}
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.passage-segments {
+  flex-grow: 1;
+  padding: 0 20px;
+  text-align: justify;
+  overflow-y: hidden;
+  height: 100%;
+}
+
+.passage-segments.animate-left {
+  animation: fadeInLeft 0.5s ease-in-out;
+}
+
+.passage-segments.animate-right {
+  animation: fadeInRight 0.5s ease-in-out;
 }
 
 /* 词性颜色定义 */
