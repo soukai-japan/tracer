@@ -1,0 +1,74 @@
+POST http://127.0.0.1:8765
+content-type: application/json
+
+{"action": "deckNamesAndIds", "version": 6}
+
+###
+
+POST http://127.0.0.1:8765
+content-type: application/json
+
+{
+    "action": "getNumCardsReviewedToday",
+    "version": 6
+}
+
+###
+
+POST http://127.0.0.1:8765
+content-type: application/json
+
+{
+    "action": "getNumCardsReviewedByDay",
+    "version": 6
+}
+
+###
+
+POST http://127.0.0.1:8765
+content-type: application/json
+
+{
+    "action": "findCards",
+    "version": 6,
+    "params": {
+        "query":"rated:1"
+    }
+}
+
+###
+
+POST http://127.0.0.1:8765
+content-type: application/json
+
+{
+    "action": "cardsInfo",
+    "version": 6,
+    "params": {
+        "cards": [
+        1706102393680,
+        1706102393681,
+        1706102393682,
+        1706102393683,
+        1706102393684,
+        1706102393685,
+        1706102393686,
+        1706102393687
+        ]
+    }
+}
+
+###
+
+POST http://127.0.0.1:8765
+content-type: application/json
+
+{
+    "action": "getReviewsOfCards",
+    "version": 6,
+    "params": {
+        "cards": [
+            "1707453048224"
+        ]
+    }
+}
