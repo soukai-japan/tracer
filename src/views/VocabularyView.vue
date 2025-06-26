@@ -283,11 +283,13 @@ const saveEdit = async () => {
       chineseTranslation: editedWord.value.chineseTranslation
         ? String(editedWord.value.chineseTranslation)
         : '',
+      pitch: editedWord.value.pitch ? String(editedWord.value.pitch) : '',
+      partOfSpeech: editedWord.value.partOfSpeech ? String(editedWord.value.partOfSpeech) : '',
+      example: editedWord.value.example ? String(editedWord.value.example) : '',
       createdAt: editedWord.value.createdAt ? new Date(editedWord.value.createdAt) : new Date(),
       tagIds: Array.isArray(editedWord.value.tagIds)
         ? editedWord.value.tagIds.map((id) => Number(id))
         : [],
-      // Add any other necessary fields here
     }
 
     try {
@@ -296,6 +298,18 @@ const saveEdit = async () => {
       editedWord.value = null
       await loadWords() // Reload words after update
       await loadAllTags() // Reload all tags after word update
+      // Reload selected word data
+      if (selectedWord.value && selectedWord.value.id) {
+        const updatedWord = await db.words.get(selectedWord.value.id)
+        if (updatedWord) {
+          selectedWord.value = updatedWord
+          if (updatedWord.tagIds && updatedWord.tagIds.length > 0) {
+            selectedWordTags.value = await db.tags.where('id').anyOf(updatedWord.tagIds).toArray()
+          } else {
+            selectedWordTags.value = []
+          }
+        }
+      }
     } catch (error) {
       console.error('Error saving word:', error)
     }
