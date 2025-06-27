@@ -6,11 +6,13 @@
         v-for="grammar in grammarList"
         :key="grammar.id"
         class="grammar-item"
-        @click="goToGrammarDetail(grammar.id)"
+        @click="grammar.id ? goToGrammarDetail(grammar.id) : null"
       >
         <h3>原文: {{ grammar.grammar }}</h3>
         <p>含义: {{ grammar.meaning }}</p>
-        <p class="created-at">{{ new Date(grammar.createdAt).toLocaleDateString() }}</p>
+        <p class="created-at">
+          {{ grammar.createdAt ? new Date(grammar.createdAt).toLocaleDateString() : '' }}
+        </p>
       </div>
     </div>
   </div>
@@ -18,13 +20,15 @@
   <!-- Detail Modal -->
   <div v-if="showDetailModal" class="modal-overlay" @click.self="closeDetailModal">
     <div class="modal-content">
-      <h2>原文: {{ selectedGrammar?.pattern }}</h2>
+      <h2>原文: {{ selectedGrammar?.grammar }}</h2>
       <p><strong>含义:</strong> {{ selectedGrammar?.meaning }}</p>
       <p v-if="selectedGrammar?.usage"><strong>用法:</strong> {{ selectedGrammar?.usage }}</p>
-      <div v-if="selectedGrammar?.examples && selectedGrammar.examples.length > 0">
+      <div v-if="selectedGrammar?.example && typeof selectedGrammar.example === 'string'">
         <strong>例句:</strong>
         <ul>
-          <li v-for="(example, index) in selectedGrammar.examples" :key="index">{{ example }}</li>
+          <li v-for="(example, index) in (selectedGrammar.example || '').split('\n')" :key="index">
+            {{ example }}
+          </li>
         </ul>
       </div>
       <div class="modal-actions">
@@ -37,12 +41,12 @@
 
   <!-- Edit Modal -->
   <div v-if="showEditModal" class="modal-overlay" @click.self="cancelEdit">
-    <div class="modal-content">
+    <div v-if="editedGrammar" class="modal-content">
       <h2>编辑语法</h2>
       <form @submit.prevent="saveEdit">
         <div class="form-group">
           <label for="edit-pattern">语法模式:</label>
-          <input type="text" id="edit-pattern" v-model="editedGrammar.pattern" required />
+          <input type="text" id="edit-pattern" v-model="editedGrammar.grammar" required />
         </div>
         <div class="form-group">
           <label for="edit-meaning">含义:</label>
@@ -56,9 +60,10 @@
           <label for="edit-examples">例句 (每行一个):</label>
           <textarea
             id="edit-examples"
-            v-model="editedGrammar.examples"
+            v-model="editedGrammar.example"
             @input="
-              (e) => (editedGrammar.examples = (e.target as HTMLTextAreaElement).value.split('\n'))
+              (e) =>
+                editedGrammar && (editedGrammar.example = (e.target as HTMLTextAreaElement).value)
             "
           ></textarea>
         </div>
@@ -73,7 +78,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { db, Grammar as DbGrammar } from '@/services/db'
+import type { Grammar as DbGrammar } from '@/services/db'
+import { db } from '@/services/db'
 
 const grammarList = ref<DbGrammar[]>([]) // 改为直接存储语法数组
 

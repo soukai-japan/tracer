@@ -149,6 +149,7 @@ watch(
 
 const analyzedSegmentData = ref<Map<number, TokenData[]>>(new Map())
 const loadingSegments = ref<Map<number, boolean>>(new Map())
+const isAnalyzing = ref(false)
 
 const analyzePassageForSegment = async (index: number) => {
   const segmentText = currentSegments.value[index]
@@ -179,7 +180,7 @@ const analyzePassage = async (segmentText: string): Promise<TokenData[]> => {
     if (!apiKey || !selectedModel) {
       alert('请先在设置中配置SiliconFlow API Key和模型')
       isAnalyzing.value = false
-      return
+      return []
     }
 
     const sentences = text.match(/[^。！？]+[。！？]?/g) || []
@@ -243,14 +244,16 @@ const selectWord = (token: TokenData) => {
 }
 const totalPages = computed(() => Math.ceil(totalSegmentsCount.value / segmentsPerPage))
 
-const passageSegmentsRef = ref(null)
+const passageSegmentsRef = ref<HTMLElement | null>(null)
 
 const prevPage = async () => {
   if (currentPage.value > 0) {
     if (passageSegmentsRef.value) {
       passageSegmentsRef.value.classList.add('animate-left')
       setTimeout(() => {
-        passageSegmentsRef.value.classList.remove('animate-left')
+        if (passageSegmentsRef.value) {
+          passageSegmentsRef.value.classList.remove('animate-left')
+        }
       }, 500)
     }
     currentPage.value--
@@ -265,7 +268,9 @@ const nextPage = async () => {
     if (passageSegmentsRef.value) {
       passageSegmentsRef.value.classList.add('animate-right')
       setTimeout(() => {
-        passageSegmentsRef.value.classList.remove('animate-right')
+        if (passageSegmentsRef.value) {
+          passageSegmentsRef.value.classList.remove('animate-right')
+        }
       }, 500)
     }
     currentPage.value++

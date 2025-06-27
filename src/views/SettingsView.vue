@@ -120,6 +120,21 @@ interface AnkiDeckConfig {
   name: string
   fields: AnkiFieldConfig[]
 }
+
+interface AnkiDeckSaveConfig {
+  name: string
+  fields: Record<string, string>
+}
+
+interface Settings {
+  id: string
+  siliconflowApiKey?: string
+  selectedAiModel?: string
+  ankiConnectUrl?: string
+  autoSyncInterval?: number
+  ankiDecks?: AnkiDeckSaveConfig[]
+}
+
 const ankiDecks = ref<AnkiDeckConfig[]>([])
 
 const isModalOpen = ref(false)
@@ -183,22 +198,25 @@ onMounted(async () => {
     siliconflowApiKey.value = aiSettings.siliconflowApiKey || ''
     selectedAiModel.value = aiSettings.selectedAiModel || ''
   }
-  const ankiSettings = await db.settings.get('anki_settings')
+  const ankiSettings = (await db.settings.get('anki_settings')) as Settings
   if (ankiSettings) {
     ankiConnectUrl.value = ankiSettings.ankiConnectUrl || 'http://127.0.0.1:8765'
     autoSyncInterval.value = ankiSettings.autoSyncInterval || 5 // 加载自动同步间隔
     // 确保加载的数据结构与新的 AnkiFieldConfig 匹配
     ankiDecks.value =
-      ankiSettings.ankiDecks?.map((deck: AnkiDeckConfig) => ({
-        ...deck,
-        fields: Object.entries(deck.fields || {}).map(([key, value]) => ({
+      ankiSettings.ankiDecks?.map((deck: AnkiDeckSaveConfig) => {
+        const fields = Object.entries(deck.fields).map(([key, value]) => ({
           id:
             Math.random().toString(36).substring(2, 15) +
             Math.random().toString(36).substring(2, 15),
           key: key,
-          value: value as string,
-        })),
-      })) || []
+          value: value,
+        }))
+        return {
+          name: deck.name,
+          fields: fields,
+        }
+      }) || []
   }
 })
 
@@ -237,9 +255,9 @@ const updateFieldKey = (deck: AnkiDeckConfig, fieldId: string, newKey: string) =
 
 const saveSettings = async () => {
   // 将 ankiDecks 转换回 Record<string, string> 格式进行保存
-  const ankiDecksToSave = ankiDecks.value.map((deck) => {
+  const ankiDecksToSave: AnkiDeckSaveConfig[] = ankiDecks.value.map((deck) => {
     const fieldsRecord: Record<string, string> = {}
-    deck.fields.forEach((field) => {
+    deck.fields.forEach((field: AnkiFieldConfig) => {
       fieldsRecord[field.key] = field.value
     })
     return {
@@ -260,7 +278,7 @@ const saveSettings = async () => {
     ankiConnectUrl: ankiConnectUrl.value,
     autoSyncInterval: autoSyncInterval.value, // 保存自动同步间隔
     ankiDecks: ankiDecksToSave,
-  })
+  } as Settings)
   alert('设置已保存！')
 }
 

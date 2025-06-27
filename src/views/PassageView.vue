@@ -59,6 +59,11 @@ onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
 })
 
+interface PassageContent {
+  content: string
+  translation?: string
+}
+
 const loadPassages = async () => {
   if (!hasMorePassages.value || isLoadingPassages.value) return
 
@@ -75,9 +80,9 @@ const loadPassages = async () => {
     const displayPassages: DisplayPassage[] = []
     for (const p of newPassages) {
       if (p.id !== undefined) {
-        const firstSegment = await db.passageContents
+        const firstSegment = (await db.passageContents
           .where({ passageId: p.id, segmentIndex: 0 })
-          .first()
+          .first()) as PassageContent | null
         displayPassages.push({
           ...p,
           content: '',

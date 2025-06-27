@@ -170,7 +170,7 @@ const initDailyAnkiChart = () => {
 }
 
 interface DailyStatsItem {
-  createdAt?: string
+  createdAt?: string | Date
   date?: string
   reviewedCards?: number
 }
@@ -180,14 +180,17 @@ const calculateDailyStats = (items: DailyStatsItem[], dateField: string = 'creat
   items.forEach((item) => {
     let date: string | undefined
     if (dateField === 'createdAt' && item.createdAt) {
-      date = new Date(item.createdAt).toLocaleDateString()
+      date =
+        item.createdAt instanceof Date
+          ? item.createdAt.toLocaleDateString()
+          : new Date(item.createdAt).toLocaleDateString()
     } else if (dateField === 'date' && item.date) {
       date = item.date // AnkiDailyReview 的 date 已经是 YYYY-MM-DD 格式
     }
 
     if (date) {
       if (dateField === 'date') {
-        stats[date] = (stats[date] || 0) + item.reviewedCards
+        stats[date] = (stats[date] || 0) + (item.reviewedCards || 0)
       } else {
         stats[date] = (stats[date] || 0) + 1
       }
